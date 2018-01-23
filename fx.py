@@ -1,14 +1,16 @@
 import numpy as np
-from PIL import Image
 import os
 import scipy as sp
-from scipy import ndimage
-from pyevtk.hl import gridToVTK
 import time
+from PIL import Image
+from pyevtk.hl import gridToVTK
+from scipy import ndimage
+
 
 def read_tiff(path, n_images):
     # Source: https://stackoverflow.com/questions/18602525/python-pil-for-loop-to-work-with-multi-image-tiff
     """
+    Reads in the .tiff.
     path - Path to the multipage-tiff file
     n_images - Number of pages in the tiff file
     """
@@ -40,23 +42,94 @@ def load_data(filename):
 
 
 def save_images(images, numImages, fileprefix):
+    """
+    Saves data as image files + imgvol file (visIt)
+    :param images:  Data
+    :param numImages:
+    :param fileprefix: name of file
+    :return: /
+    """
     directory = "{}/".format(fileprefix)
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    visIt_file = open("{}/{}.imgvol".format(fileprefix, fileprefix), "w")
+    filehandle = open("{}/{}.imgvol".format(fileprefix, fileprefix), "w")
 
     for i in range(0, numImages):
         im = Image.fromarray(images[:, :, i])
         filename = "{}/{}{}.png".format(fileprefix, fileprefix, i)
-
-        visIt_file.write("{}{}.png\n".format(fileprefix, i))
+        filehandle.write("{}{}.png\n".format(fileprefix, i))
         im.save(filename)
 
-    visIt_file.close()
+    filehandle.close()
 
+
+def search_region(im_size):
+    """
+    # Creates a list of all the coordinates/indexes of the image.
+    :param im_size:
+    :return:
+    """
+    x_p = np.arange(1, im_size[1], 1, dtype=int)
+    y_p = np.arange(1, im_size[0], 1, dtype=int)
+    z_p = np.arange(1, im_size[2], 1, dtype=int)
+    region = np.vstack(np.meshgrid(x_p, y_p, z_p)).reshape(3, -1).T
+    region = region.tolist()
+    return region
+
+
+def connected_structure(no):
+    """
+    Structural element for the erosion/dilation operators
+    :param no:
+    :return:
+    """
+    if no == 6:
+        structure = np.zeros((3,) * 3)
+        structure[1, :, 1] = 1
+        structure[:, 1, 1] = 1
+        structure[1, 1, :] = 1
+    elif no == 26:
+        structure = np.ones((3,) * 3)
+    else:
+        print 'error: connected structure'
+    return structure
+
+
+def dilate(data, structure, num=1):
+    for i in range(num):
+        data = sp.ndimage.morphology.binary_dilation(data, structure).astype(np.uint8)
+    return data
+
+
+def erode(data, structure, num=1):
+    for i in range(num):
+        data = sp.ndimage.morphology.binary_erosion(data, structure).astype(np.uint8)
+    return data
+
+
+def save_VTR(data, file):
+    """
+    save as a .vtr file for VisIt
+    :param data:
+    :param file:
+    :return:
+    """
+    dim = data.shape
+    x = np.arange(0, dim[0] + 1)
+    y = np.arange(0, dim[1] + 1)
+    z = np.arange(0, dim[2] + 1)
+    filename = "./" + file
+
+    gridToVTK(filename, x, y, z, cellData={file: data})
 
 def grow_region(images, seed):
+    """
+    Region growing algorithm
+    :param images:
+    :param seed:
+    :return:
+    """
     im_size = images.shape
     searchable = search_region(im_size)
     region = [list(seed)]
@@ -138,52 +211,6 @@ def grow_region(images, seed):
     R[seed] = 1
     print R
     return R
-
-
-def search_region(im_size):
-    # Creates a list of all the coordinates/indexes of the image.
-    x_p = np.arange(1, im_size[1], 1, dtype=int)
-    y_p = np.arange(1, im_size[0], 1, dtype=int)
-    z_p = np.arange(1, im_size[2], 1, dtype=int)
-    region = np.vstack(np.meshgrid(x_p, y_p, z_p)).reshape(3, -1).T
-    region = region.tolist()
-    return region
-
-
-def connected_structure(no):
-    if no == 6:
-        structure = np.zeros((3,) * 3)
-        structure[1, :, 1] = 1
-        structure[:, 1, 1] = 1
-        structure[1, 1, :] = 1
-    elif no == 26:
-        structure = np.ones((3,) * 3)
-    else:
-        print 'error: connected structure'
-    return structure
-
-
-def dilate(data, structure, num=1):
-    for i in range(num):
-        data = sp.ndimage.morphology.binary_dilation(data, structure).astype(np.uint8)
-    return data
-
-
-def erode(data, structure, num=1):
-    for i in range(num):
-        data = sp.ndimage.morphology.binary_erosion(data, structure).astype(np.uint8)
-    return data
-
-
-def save_VTR(data, file):
-    dim = data.shape
-    x = np.arange(0, dim[0] + 1)
-    y = np.arange(0, dim[1] + 1)
-    z = np.arange(0, dim[2] + 1)
-    filename = "./" + file
-    # save as a .vtr
-    gridToVTK(filename, x, y, z, cellData={file: data})
-
 
 def grow_region2(images, seed):
     im_size = images.shape
@@ -343,7 +370,7 @@ def grow_region4(imgs, seed, n):
     :return:
     """
     t0 = time.time()
-    fh = open("hello.txt", "w")
+    fh = open("SS.txt", "w")
     img_size = imgs.shape
     # print img_size
     img2 = np.zeros(img_size).astype(np.uint8)
@@ -448,4 +475,91 @@ def grow_region4(imgs, seed, n):
     img_skeleton = dilate(img_skeleton, connected_structure(26), n)
     fh.write("{:f}\n".format(time.time()-t0))
     fh.close()
+    return img_skeleton
+
+def grow_region5(imgs, seed, n):
+    """
+    Region growing algorithm. - same as 4 but without the print statements and commented out lines.
+    :param imgs: data set
+    :param seed: point.
+    :param n: number of erosion/dilation operators
+    :return:
+    """
+
+    img2 = erode(imgs, connected_structure(6), n)
+    isGrowing = True
+
+    # Img_skeleton holds infomation about each voxel.
+    # -1 is not part of the region.
+    # 0 could be - unknown
+    # 1 could be - unknown but is what the search region contains
+    # 3 is part of region.
+
+    # Elminate all the areas that arnt possibly region from search space
+    img_skeleton = (img2 == 0) * -1
+    img_skeleton[seed] = 3
+
+    growth = [list(seed)]
+    neighbourhood = []
+    iter_num = 0
+
+    while isGrowing:
+        isGrowing = False
+        new_growth = []
+
+        iter_num = iter_num + 1
+        print iter_num
+
+        x_Max = max([item[2] for item in growth]) + 1
+        y_Max = max([item[1] for item in growth]) + 1
+        z_Max = max([item[0] for item in growth]) + 1
+        x_Min = min([item[2] for item in growth]) - 1
+        y_Min = min([item[1] for item in growth]) - 1
+        z_Min = min([item[0] for item in growth]) - 1
+
+        # Limit the volume where expansion searches
+        s = img_skeleton[z_Min:z_Max+1, y_Min:y_Max+1, x_Min:x_Max+1]
+
+        # examine whether it has been searched before or is new.
+        s[s == 0] = 1
+
+        # Reorder it to make it the same shape as the reordered meshgrid bellow
+        s = (np.vstack(s.reshape(z_Max-z_Min+1, -1,order='F'))).reshape(-1,y_Max-y_Min+1,order='C').T
+        s = s.reshape(1,-1).T
+
+        x_p = np.arange(x_Min, x_Max + 1, 1, dtype=int)
+        y_p = np.arange(y_Min, y_Max + 1, 1, dtype=int)
+        z_p = np.arange(z_Min, z_Max + 1, 1, dtype=int)
+        # correspooinding coordinates of each voxel in search space
+        e =  (np.vstack(np.meshgrid(z_p,  y_p, x_p)).reshape(3, -1,).T)
+
+        # creates the search space depending on img_skeleton value
+        neighbourhood = e[(np.where(s == 1)[0]).T, :]
+        neighbourhood = neighbourhood.tolist()
+
+        # For every point in search space
+        for coord in neighbourhood:
+            # Take a point that grew in the previous iteration
+            for point in growth:
+                # Check whether they are connected / 6
+                if ((point[0] - 1 <= coord[0] <= point[0] + 1) and (coord[1] == point[1]) and (coord[2] == point[2])) \
+                        or ((point[1] - 1 <= coord[1] <= point[1] + 1) and (coord[0] == point[0]) and (coord[2] == point[2])) \
+                        or ((point[2] - 1 <= coord[2] <= point[2] + 1) and (coord[1] == point[1]) and (coord[0] == point[0])):
+                    # Remove from list for further checking
+                    img_skeleton[tuple(coord)] = -1
+                    # if connected, check whether to grow point.
+                    if np.sum(imgs[coord[0] - 1:coord[0] + 2,
+                              coord[1] - 1:coord[1] + 2,
+                              coord[2] - 1:coord[2] + 2]) == 27:
+
+                        isGrowing = True
+                        new_growth.append(coord)
+                        img_skeleton[tuple(coord)] = 3
+                        break
+                # else:
+                #     img_skeleton[tuple(coord)] = 1
+        growth = new_growth
+
+    img_skeleton = (img_skeleton == 3)*1
+    img_skeleton = dilate(img_skeleton, connected_structure(26), n)
     return img_skeleton
