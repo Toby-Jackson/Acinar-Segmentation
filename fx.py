@@ -30,7 +30,7 @@ def read_tiff(path, n_images):
             # Not enough frames in img
             break
 
-    return np.array(images, dtype=np.uint8)
+    return np.array(images, dtype=np.uint8).transpose()
 
 
 def save_data(image, filename):
@@ -414,6 +414,7 @@ def grow_region4(imgs, seed, n):
         # s[0,0,1] = 5
         # s[1,0,0] = 6
         # print s
+
         s = (np.vstack(s.reshape(z_Max-z_Min+1, -1,order='F'))).reshape(-1,y_Max-y_Min+1,order='C').T
         # print s
         s = s.reshape(1,-1).T
@@ -508,7 +509,7 @@ def grow_region5(imgs, seed, n):
         new_growth = []
 
         iter_num = iter_num + 1
-        print iter_num
+        print iter_num,
 
         x_Max = max([item[2] for item in growth]) + 1
         y_Max = max([item[1] for item in growth]) + 1
@@ -516,7 +517,6 @@ def grow_region5(imgs, seed, n):
         x_Min = min([item[2] for item in growth]) - 1
         y_Min = min([item[1] for item in growth]) - 1
         z_Min = min([item[0] for item in growth]) - 1
-
         # Limit the volume where expansion searches
         s = img_skeleton[z_Min:z_Max+1, y_Min:y_Max+1, x_Min:x_Max+1]
 
@@ -563,3 +563,229 @@ def grow_region5(imgs, seed, n):
     img_skeleton = (img_skeleton == 3)*1
     img_skeleton = dilate(img_skeleton, connected_structure(26), n)
     return img_skeleton
+
+
+def grow_region6(imgs, seed, n):
+    """
+    Region growing algorithm: trial with splitting search region into 8 around seed.
+    :param imgs:
+    :param seed:
+    :param n:
+    :return:
+    """
+    dim = imgs.shape
+    # img2 = erode(imgs, connected_structure(6), n)
+    # c = 0
+    # sections = []
+    # growth_sections = []
+    # for i in range(2):
+    #     for j in range(2):
+    #         for k in range(2):
+    #             print 0 + i*seed[0], (1-i)*(seed[0] - 1) + i * dim[0]
+    #             print 0 + j*seed[1], (1-j)*(seed[1] - 1) + j * dim[1]
+    #             print 0 + k*seed[2], (1-k)*(seed[2] - 1) + k * dim[2]
+    #
+    #             sections.append(img2[0 + i*seed[0]: (1-i)*(seed[0]) + i * dim[0],
+    #                             0 + j*seed[1]: (1-j)*(seed[1]) + j * dim[1],
+    #                             0 + k*seed[2]: (1-k)*(seed[2]) + k * dim[2]])
+    #             difseed = np.array([(1-i), (1-j), (1-k)]) * np.array([seed[0] - 3, seed[1] - 3 , seed[2] - 3]) + np.array([1,1,1])
+    #             print difseed
+    #             growth_sections.append(grow_region5(sections[c], tuple(difseed), 0))
+    #             print sections[c].shape
+    #             c += 1
+    #             print c
+    #
+    # growth_combined = np.dstack([np.vstack([np.hstack([growth_sections[0],growth_sections[2]]),
+    #                                         np.hstack([growth_sections[4],growth_sections[6]])]),
+    #                              np.vstack([np.hstack([growth_sections[1],growth_sections[3]]),
+    #                                         np.hstack([growth_sections[5],growth_sections[7]])])])
+    #
+    # save_VTR(growth_combined, 'coarse')
+    # save_data(growth_combined, 'coarse')
+    growth_combined = load_data('coarse.npy')
+    isGrowing = True
+
+    img_skeleton = (growth_combined == 1) * 3
+
+
+    iter_num = 0
+
+    while isGrowing:
+        isGrowing = False
+        new_growth = []
+
+        iter_num = iter_num + 1
+        print iter_num,
+        if iter_num != 1:
+            x_Max = max([item[2] for item in growth]) + 1
+            y_Max = max([item[1] for item in growth]) + 1
+            z_Max = max([item[0] for item in growth]) + 1
+            x_Min = min([item[2] for item in growth]) - 1
+            y_Min = min([item[1] for item in growth]) - 1
+            z_Min = min([item[0] for item in growth]) - 1
+            # Limit the volume where expansion searches
+            s = img_skeleton[z_Min:z_Max + 1, y_Min:y_Max + 1, x_Min:x_Max + 1]
+
+            # examine whether it has been searched before or is new.
+            s[s == 0] = 1
+
+            # Reorder it to make it the same shape as the reordered meshgrid bellow
+            s = (np.vstack(s.reshape(z_Max - z_Min + 1, -1, order='F'))).reshape(-1, y_Max - y_Min + 1, order='C').T
+            s = s.reshape(1, -1).T
+
+            x_p = np.arange(x_Min, x_Max + 1, 1, dtype=int)
+            y_p = np.arange(y_Min, y_Max + 1, 1, dtype=int)
+            z_p = np.arange(z_Min, z_Max + 1, 1, dtype=int)
+            # correspooinding coordinates of each voxel in search space
+            e = (np.vstack(np.meshgrid(z_p, y_p, x_p)).reshape(3, -1, ).T)
+
+            # creates the search space depending on img_skeleton value
+            neighbourhood = e[(np.where(s == 1)[0]).T, :]
+            neighbourhood = neighbourhood.tolist()
+
+        else:
+            s = img_skeleton
+            print 'hi'
+            x_Max = dim[2] -1
+            y_Max = dim[1] -1
+            z_Max = dim[0] -1
+            x_Min = 0
+            y_Min = 0
+            z_Min = 0
+
+            # Reorder it to make it the same shape as the reordered meshgrid bellow
+            s = (np.vstack(s.reshape(z_Max - z_Min + 1, -1, order='F'))).reshape(-1, y_Max - y_Min + 1, order='C').T
+            s = s.reshape(1, -1).T
+            print s
+            print s.shape
+            x_p = np.arange(x_Min, x_Max + 1, 1, dtype=int)
+            y_p = np.arange(y_Min, y_Max + 1, 1, dtype=int)
+            z_p = np.arange(z_Min, z_Max + 1, 1, dtype=int)
+            # correspooinding coordinates of each voxel in search space
+            e = (np.vstack(np.meshgrid(z_p, y_p, x_p)).reshape(3, -1, ).T)
+            print e
+            # creates the search space depending on img_skeleton value
+            neighbourhood = e[(np.where(s == 0)[0]).T, :]
+            neighbourhood = neighbourhood.tolist()
+            print len(neighbourhood)
+
+            growth = e[(np.where(s == 3)[0]).T, :]
+            growth = growth.tolist()
+            print len(growth)
+
+        # For every point in search space
+        for coord in neighbourhood:
+            if np.sum(imgs[coord[0] - 1:coord[0] + 2,
+                              coord[1] - 1:coord[1] + 2,
+                              coord[2] - 1:coord[2] + 2]) == 0:
+                continue
+            print coord
+            # Take a point that grew in the previous iteration
+            for point in growth:
+
+                # Check whether they are connected / 6
+                if ((point[0] - 1 <= coord[0] <= point[0] + 1) and (coord[1] == point[1]) and (coord[2] == point[2])) \
+                        or ((point[1] - 1 <= coord[1] <= point[1] + 1) and (coord[0] == point[0]) and (
+                                    coord[2] == point[2])) \
+                        or ((point[2] - 1 <= coord[2] <= point[2] + 1) and (coord[1] == point[1]) and (
+                                    coord[0] == point[0])):
+                    # Remove from list for further checking
+                    img_skeleton[tuple(coord)] = -1
+                    # if connected, check whether to grow point.
+                    if np.sum(imgs[coord[0] - 1:coord[0] + 2,
+                              coord[1] - 1:coord[1] + 2,
+                              coord[2] - 1:coord[2] + 2]) == 27:
+                        isGrowing = True
+                        new_growth.append(coord)
+                        img_skeleton[tuple(coord)] = 3
+                        break
+                        # else:
+                        #     img_skeleton[tuple(coord)] = 1
+
+        growth = new_growth
+
+    growth_combined = (img_skeleton == 3) * 1
+
+    growth_combined = dilate(growth_combined, connected_structure(26), n)
+    return growth_combined
+
+def grow_region7(imgs, seed, n):
+    """
+    Region growing algorithm. Improved.
+    :param imgs: data set
+    :param seed: point.
+    :param n: number of erosion/dilation operators
+    :return: binary image of seeded region
+    """
+    img_eroded = erode(imgs, connected_structure(6), n)
+    isGrowing = True
+
+    # Img_skeleton holds information about each voxel.
+    # -1 is not part of the region.
+    # 0 could be - unknown
+    # 1 is part of region.
+
+    # Eliminate all the areas that arn't possibly region from search space
+    img_skeleton = (img_eroded == 0) * -1
+    img_skeleton[seed] = 1
+
+    # inital growth
+    growth = [seed]
+    iter_num = 0
+
+    directions = [[0, 0, 1], [0, 0, -1],
+                  [0, 1, 0], [0, -1, 0],
+                  [1, 0, 0], [-1, 0, 0]]
+
+    while isGrowing:
+        isGrowing = False
+        new_growth = []
+
+        iter_num = iter_num + 1
+        print iter_num,
+
+        # Goes through every recent growth point and searches +1/-1 around it and sees if it is 'connected', if it is it
+        # adds it to the search space for the next loop, else it removes it from being checked again.
+        for point in growth:
+            for direction in directions:
+                coord = np.array(point) + direction
+
+                if img_skeleton[tuple(coord)] == 0:
+                    if np.sum(imgs[coord[0] - 1:coord[0] + 2,
+                              coord[1] - 1:coord[1] + 2,
+                              coord[2] - 1:coord[2] + 2]) == 27:
+                        isGrowing = True
+                        new_growth.append(coord)
+                        img_skeleton[tuple(coord)] = 1
+                        # break
+                    else:
+                        img_skeleton[tuple(coord)] = -1
+
+        growth = new_growth
+
+    # turning it back into a binary image
+    img_skeleton = (img_skeleton == 1) * 1
+    img_skeleton = dilate(img_skeleton, connected_structure(26), n)
+    return img_skeleton
+
+def run_grow_region(loadfilename, savefilename, seed, n):
+    """
+    Calls the grow_region function
+    :param loadfilename: string - file prefix
+    :param savefilename: string - file prefix
+    :param seed:
+    :param n: number of erosion/dilations
+    :return: / just saves stuff
+    """
+    loadfilename = loadfilename + '.npy'
+
+    data = load_data(loadfilename)
+
+    # Flips zeros and ones.
+    data = (data == 0)*1
+
+    growth = grow_region7(data.astype(np.uint8),seed,n)
+
+    save_VTR(growth, savefilename)
+    save_data(growth, savefilename)
+
